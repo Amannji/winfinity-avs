@@ -60,15 +60,26 @@ async function respondToTask(
   taskIndex: number
 ) {
   try {
+    //Game Response Categories
+
+    // Perform sentiment analysis on the task contents
+
+    //CASES:
+
     const response = await ollama.chat({
       model: "llama3.2",
-      messages: [{ role: "user", content: task.contents }],
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a sentiment analysis assistant. Analyze the emotional tone of the text and respond with a clear statement about the sentiment. Only provide declarative statements about the emotional content. Do not ask questions. Keep responses concise and direct.",
+        },
+        {
+          role: "user",
+          content: task.contents,
+        },
+      ],
     });
-
-    // let isHappy = true;
-    // if (response.message.content.includes("unsafe")) {
-    //   isHappy = false;
-    // }
     const textResponse = response.message.content;
     const gameIdResponse = 1;
     const targetScoreResponse = task.scoreDifference;
