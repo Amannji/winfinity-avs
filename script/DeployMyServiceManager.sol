@@ -20,7 +20,7 @@ contract DeployMyServiceManager is Script{
     function setUp() public virtual{
         deployer = vm.rememberKey(vm.envUint("PRIVATE_KEY"));
         operator = vm.rememberKey(vm.envUint("OPERATOR_PRIVATE_KEY"));
-        vm.label(deployer,"Deployer");
+        vm.label(deployer, "Deployer");
         vm.label(operator, "Operator");
     }
 
@@ -48,24 +48,30 @@ contract DeployMyServiceManager is Script{
         bytes32 salt = keccak256(abi.encodePacked(block.timestamp, operator));
         uint256 expiry = block.timestamp + 1 hours;
 
-        bytes32 operatorRegistrationDigestHash = avsDirectory.calculateOperatorAVSRegistrationDigestHash(
-            operator,
-            address(serviceManager),
-            salt,
-            expiry
+        bytes32 operatorRegistrationDigestHash = avsDirectory
+            .calculateOperatorAVSRegistrationDigestHash(
+                operator,
+                address(serviceManager),
+                salt,
+                expiry
+            );
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            vm.envUint("OPERATOR_PRIVATE_KEY"),
+            operatorRegistrationDigestHash
         );
+        bytes memory signature = abi.encodePacked(r, s, v);
 
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(vm.envUint("OPERATOR_PRIVATE_KEY"), operatorRegistrationDigestHash);
-        bytes memory signature = abi.encodePacked(r,s,v);
-
-        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature = ISignatureUtils.SignatureWithSaltAndExpiry({
-            signature: signature,
-            salt: salt,
-            expiry: expiry
-        });
+       ISignatureUtils.SignatureWithSaltAndExpiry
+            memory operatorSignature = ISignatureUtils
+                .SignatureWithSaltAndExpiry({
+                    signature: signature,
+                    salt: salt,
+                    expiry: expiry
+                });
 
         vm.startBroadcast(operator);
-        serviceManager.registerOperator(operator,operatorSignature);
+        serviceManager.registerOperator(operator, operatorSignature);
         vm.stopBroadcast();
     }
 

@@ -1,19 +1,20 @@
 import {
   createPublicClient,
   createWalletClient,
-  encodePacked,
   http,
-  keccak256,
   parseAbi,
+  encodePacked,
+  keccak256,
   parseAbiItem,
+  AbiEvent,
 } from "viem";
-import { anvil } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
+import { anvil } from "viem/chains";
 import ollama from "ollama";
 import "dotenv/config";
 
-if (!process.env.PRIVATE_KEY) {
-  throw new Error("Private key is not set");
+if (!process.env.OPERATOR_PRIVATE_KEY) {
+  throw new Error("OPERATOR_PRIVATE_KEY not found in environment variables");
 }
 
 type Task = {
@@ -22,21 +23,23 @@ type Task = {
 };
 
 const abi = parseAbi([
-  "function respondToTask((string contents,uint32 taskCreatedBlock) task,uint32 taskIndex,bool isSafe, bytes signature) external returns (bool)",
+  "function respondToTask((string contents, uint32 taskCreatedBlock) task, uint32 referenceTaskIndex, bool isSafe, bytes memory signature) external",
   "event NewTaskCreated(uint32 indexed taskIndex, (string contents, uint32 taskCreatedBlock) task)",
 ]);
 
 async function createSignature(
   account: any,
-  ifSafe: boolean,
+  isSafe: boolean,
   contents: string
 ) {
+  // Recreate the same message hash that the contract uses
   const messageHash = keccak256(
-    encodePacked(["bool", false], [ifSafe, contents])
+    encodePacked(["bool", "string"], [isSafe, contents])
   );
 
+  // Sign the message hash
   const signature = await account.signMessage({
-    message: messageHash,
+    message: { raw: messageHash },
   });
 
   return signature;
@@ -51,21 +54,14 @@ async function respondToTask(
   taskIndex: number
 ) {
   try {
-    const response = await ollama.generate({
-      model: "llama-guard3:lb",
-      prompt: task.contents,
-    });
+    // const response = await ollama.chat({
+    //   model: 'llama-guard3:1b',
+    //   messages: [{ role: 'user', 'content': task.contents }]
+    // })
 
     let isSafe = true;
-    if (response.message.content.includes("unsafe")) {
-      isSafe = false;
-    }
 
-    const signature = await createSignature(
-      account,
-      isSafe,
-      response.message.content
-    );
+    const signature = await createSignature(account, isSafe, task.contents);
 
     const { request } = await publicClient.simulateContract({
       address: contractAddress,
@@ -77,22 +73,23 @@ async function respondToTask(
 
     const hash = await walletClient.writeContract(request);
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
-
-    console.log("Responded to task", {
+    console.log("Responded to task:", {
       taskIndex,
       task,
       isSafe,
       transactionHash: hash,
     });
   } catch (error) {
-    console.log(error);
+    console.error("Error responding to task:", error);
   }
 }
 
 async function main() {
-  const contractAddress = "0x364C7188028348566E38D762f6095741c49f492B";
+  const contractAddress = "0x4fC92Db7DD04f69e8ed448747F589FFD91622886";
 
-  const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
+  const account = privateKeyToAccount(
+    process.env.OPERATOR_PRIVATE_KEY as `0x${string}`
+  );
 
   const publicClient = createPublicClient({
     chain: anvil,
@@ -105,12 +102,12 @@ async function main() {
     account,
   });
 
-  console.log("Starting to watch for new tasks....");
+  console.log("Starting to watch for new tasks...");
   publicClient.watchEvent({
     address: contractAddress,
     event: parseAbiItem(
       "event NewTaskCreated(uint32 indexed taskIndex, (string contents, uint32 taskCreatedBlock) task)"
-    ),
+    ) as AbiEvent,
     onLogs: async (logs) => {
       for (const log of logs) {
         const { args } = log;
@@ -137,8 +134,8 @@ async function main() {
   });
 
   process.on("SIGINT", () => {
-    console.log("Stopping task watcher.");
-    process.exit(0);
+    console.log("Stopping task watcher...");
+    process.exit();
   });
 
   await new Promise(() => {});
