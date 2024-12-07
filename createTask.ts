@@ -37,7 +37,7 @@ async function main() {
       address: contractAddress,
       abi,
       functionName: "createTask",
-      args: ["I wanna rob a bank!"],
+      args: ["I am really happy today!"],
       account: account.address,
     });
 

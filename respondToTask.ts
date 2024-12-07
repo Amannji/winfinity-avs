@@ -54,12 +54,15 @@ async function respondToTask(
   taskIndex: number
 ) {
   try {
-    // const response = await ollama.chat({
-    //   model: 'llama-guard3:1b',
-    //   messages: [{ role: 'user', 'content': task.contents }]
-    // })
+    const response = await ollama.chat({
+      model: "llama-guard3:1b",
+      messages: [{ role: "user", content: task.contents }],
+    });
 
     let isSafe = true;
+    if (response.message.content.includes("unsafe")) {
+      isSafe = false;
+    }
 
     const signature = await createSignature(account, isSafe, task.contents);
 
