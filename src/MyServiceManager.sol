@@ -18,14 +18,16 @@ contract MyServiceManager {
 
     //events
     event NewTaskCreated(uint32 indexed taskIndex, Task task);
-    event TaskResponded(uint32 indexed taskIndex, Task index, bool taskResponse, address operator);
+    event TaskResponded(uint32 indexed taskIndex, Task index, string textResponse, uint32 gameIdResponse, uint32 targetScoreResponse, address operator);
 
     struct Task{
         string contents;
         uint32 taskCreatedBlock;
-
+        uint32 scoreDifference;
+        
     }
 
+    
     //modifiers 
     modifier onlyOperator(){
         require(operatorsRegistered[msg.sender], "Only operators can call this function");
@@ -52,21 +54,39 @@ contract MyServiceManager {
     }
 
     //Create Task 
-    function createTask(string memory contents) external returns (Task memory){
+    function createTask(string memory contents, uint32 scoreDifference) external returns (Task memory){
         Task memory newTask;
-        newTask.contents = contents;
+        newTask.contents = contents; 
+        newTask.scoreDifference = scoreDifference;
         newTask.taskCreatedBlock = uint32(block.number);
 
         allTasksHashed[latestnum] = keccak256(abi.encode(newTask));
         emit NewTaskCreated(latestnum, newTask);
         latestnum = latestnum + 1;
         return newTask;
-        }
-
-
-
+    }
     //Respond to task
-    function respondToTask(Task memory task, uint32 taskIndex, bool taskResponse, bytes memory signature) external onlyOperator{
+    // function respondToTask(Task memory task, uint32 taskIndex, bool taskResponse, bytes memory signature) external onlyOperator{
+    //     require(
+    //         keccak256(abi.encode(task)) == allTasksHashed[taskIndex], "Task does not exist");
+
+    //     require(
+    //         allTasksResponses[msg.sender][taskIndex].length == 0, "Operator has already responded to the task"
+    //     );
+
+    //     bytes32 messageHash = keccak256(abi.encodePacked(taskResponse, task.contents));
+    //     bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
+    //     if (ethSignedMessageHash.recover(signature) != msg.sender){
+    //         revert("Invalid signature");
+    //     }
+
+    //     allTasksResponses[msg.sender][taskIndex] = signature;
+
+    //     emit TaskResponded(taskIndex, task, taskResponse, msg.sender);
+
+    // }
+
+    function respondToTask(Task memory task, uint32 taskIndex, string memory textResponse, uint32 gameIdResponse, uint32 targetScoreResponse, bytes memory signature) external onlyOperator{
         require(
             keccak256(abi.encode(task)) == allTasksHashed[taskIndex], "Task does not exist");
 
@@ -74,7 +94,7 @@ contract MyServiceManager {
             allTasksResponses[msg.sender][taskIndex].length == 0, "Operator has already responded to the task"
         );
 
-        bytes32 messageHash = keccak256(abi.encodePacked(taskResponse, task.contents));
+        bytes32 messageHash = keccak256(abi.encodePacked(textResponse,gameIdResponse,targetScoreResponse, task.contents));
         bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
         if (ethSignedMessageHash.recover(signature) != msg.sender){
             revert("Invalid signature");
@@ -82,7 +102,7 @@ contract MyServiceManager {
 
         allTasksResponses[msg.sender][taskIndex] = signature;
 
-        emit TaskResponded(taskIndex, task, taskResponse, msg.sender);
+        emit TaskResponded(taskIndex, task, textResponse,gameIdResponse,targetScoreResponse, msg.sender);
 
     }
 

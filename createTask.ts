@@ -13,7 +13,7 @@ type Task = {
 };
 
 const abi = parseAbi([
-  "function createTask(string memory contents) external returns ((string contents, uint32 taskCreatedBlock))",
+  "function createTask(string memory contents, uint32 scoreDifference) external returns ((string contents, uint32 taskCreatedBlock))",
 ]);
 
 async function main() {
@@ -37,7 +37,7 @@ async function main() {
       address: contractAddress,
       abi,
       functionName: "createTask",
-      args: ["I am really happy today!"],
+      args: ["I am really happy!", 10],
       account: account.address,
     });
 

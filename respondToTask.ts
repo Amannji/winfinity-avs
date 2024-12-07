@@ -20,24 +20,30 @@ if (!process.env.OPERATOR_PRIVATE_KEY) {
 type Task = {
   contents: string;
   taskCreatedBlock: number;
+  scoreDifference: number;
 };
 
 const abi = parseAbi([
-  "function respondToTask((string contents, uint32 taskCreatedBlock) task, uint32 referenceTaskIndex, bool isSafe, bytes memory signature) external",
-  "event NewTaskCreated(uint32 indexed taskIndex, (string contents, uint32 taskCreatedBlock) task)",
+  "function respondToTask((string contents, uint32 taskCreatedBlock, uint32 scoreDifference) task, uint32 referenceTaskIndex, string textResponse, uint32 targetScoreResponse,uint32 gameIdResponse, bytes memory signature) external",
+  "event NewTaskCreated(uint32 indexed taskIndex, (string contents, uint32 taskCreatedBlock, uint32 scoreDifference) task)",
 ]);
 
 async function createSignature(
   account: any,
-  isSafe: boolean,
+  textResponse: string,
+  gameIdResponse: number,
+  targetScoreResponse: number,
   contents: string
 ) {
-  // Recreate the same message hash that the contract uses
+  // Match the contract's encoding exactly
   const messageHash = keccak256(
-    encodePacked(["bool", "string"], [isSafe, contents])
+    encodePacked(
+      ["string", "uint32", "uint32", "string"],
+      [textResponse, gameIdResponse, targetScoreResponse, contents]
+    )
   );
 
-  // Sign the message hash
+  // Sign the message directly (not the raw hash)
   const signature = await account.signMessage({
     message: { raw: messageHash },
   });
@@ -55,22 +61,38 @@ async function respondToTask(
 ) {
   try {
     const response = await ollama.chat({
-      model: "llama-guard3:1b",
+      model: "llama3.2",
       messages: [{ role: "user", content: task.contents }],
     });
 
-    let isSafe = true;
-    if (response.message.content.includes("unsafe")) {
-      isSafe = false;
-    }
+    // let isHappy = true;
+    // if (response.message.content.includes("unsafe")) {
+    //   isHappy = false;
+    // }
+    const textResponse = response.message.content;
+    const gameIdResponse = 1;
+    const targetScoreResponse = task.scoreDifference;
 
-    const signature = await createSignature(account, isSafe, task.contents);
+    const signature = await createSignature(
+      account,
+      textResponse,
+      gameIdResponse,
+      targetScoreResponse,
+      task.contents
+    );
 
     const { request } = await publicClient.simulateContract({
       address: contractAddress,
       abi,
       functionName: "respondToTask",
-      args: [task, taskIndex, isSafe, signature],
+      args: [
+        task,
+        taskIndex,
+        textResponse,
+        gameIdResponse,
+        targetScoreResponse,
+        signature,
+      ],
       account: account.address,
     });
 
@@ -79,7 +101,9 @@ async function respondToTask(
     console.log("Responded to task:", {
       taskIndex,
       task,
-      isSafe,
+      textResponse,
+      gameIdResponse,
+      targetScoreResponse,
       transactionHash: hash,
     });
   } catch (error) {
@@ -109,7 +133,7 @@ async function main() {
   publicClient.watchEvent({
     address: contractAddress,
     event: parseAbiItem(
-      "event NewTaskCreated(uint32 indexed taskIndex, (string contents, uint32 taskCreatedBlock) task)"
+      "event NewTaskCreated(uint32 indexed taskIndex, (string contents, uint32 taskCreatedBlock, uint32 scoreDifference) task)"
     ) as AbiEvent,
     onLogs: async (logs) => {
       for (const log of logs) {
