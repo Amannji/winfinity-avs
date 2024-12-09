@@ -10,9 +10,11 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 import { anvil } from "viem/chains";
 import "dotenv/config";
+import cors from "cors";
 
 const app = express();
 const port = 3001;
+app.use(cors());
 
 if (!process.env.PRIVATE_KEY) {
   throw new Error("PRIVATE_KEY not found in environment variables");

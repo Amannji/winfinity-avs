@@ -66,23 +66,79 @@ async function respondToTask(
 
     //CASES:
 
-    const response = await ollama.chat({
-      model: "llama3.2",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a sentiment analysis assistant. Analyze the emotional tone of the text and respond with a clear statement about the sentiment. Only provide declarative statements about the emotional content. Do not ask questions. Keep responses concise and direct.",
-        },
-        {
-          role: "user",
-          content: task.contents,
-        },
-      ],
-    });
-    const textResponse = response.message.content;
-    const gameIdResponse = 1;
-    const targetScoreResponse = task.scoreDifference;
+    let textResponse;
+    let gameIdResponse;
+    let targetScoreResponse;
+
+    // Case 1: When scoreDifference is 1000
+    if (task.scoreDifference === 30) {
+      const response = await ollama.chat({
+        model: "llama3.2",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a sentiment analysis assistant. Analyze the emotional tone of the text and classify it as either STRONG_HAPPY or OTHER. Respond with just the classification.",
+          },
+          {
+            role: "user",
+            content: task.contents,
+          },
+        ],
+      });
+
+      const sentiment = response.message.content;
+      if (sentiment.includes("STRONG_HAPPY")) {
+        gameIdResponse = 1;
+        targetScoreResponse = 40; // High target score
+      } else {
+        gameIdResponse = 2;
+        targetScoreResponse = 10; // Medium target score
+      }
+      textResponse = sentiment;
+    }
+    // Case 2: When contents is empty, analyze scoreDifference
+    else if (task.contents === "") {
+      if (task.scoreDifference > 10) {
+        textResponse =
+          "The score difference indicates strong positive momentum!";
+        gameIdResponse = 1;
+        targetScoreResponse = 40; // High target score
+      } else if (task.scoreDifference < 10) {
+        textResponse = "The situation shows relief and steady progress.";
+        gameIdResponse = 2;
+        targetScoreResponse = 20; // Low target score
+      } else {
+        textResponse = "Neutral sentiment detected based on score difference.";
+        gameIdResponse = 1;
+        targetScoreResponse = 30; // Medium target score
+      }
+    }
+    // Default case
+    else {
+      const response = await ollama.chat({
+        model: "llama3.2",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a sentiment analysis assistant and a game curator. Analyze the emotional tone of the text and respond with a statement about how the game you gonna present next will be appeal to the user. Keep the responses friendly, like you are complimenting the user. Keep response very concise",
+          },
+          {
+            role: "user",
+            content: task.contents,
+          },
+        ],
+      });
+      textResponse = response.message.content;
+
+      targetScoreResponse = task.scoreDifference;
+      if (response.message.content.includes("positive")) {
+        gameIdResponse = 1;
+      } else {
+        gameIdResponse = 3;
+      }
+    }
 
     const signature = await createSignature(
       account,
@@ -123,7 +179,7 @@ async function respondToTask(
 }
 
 async function main() {
-  const contractAddress = "0x4fC92Db7DD04f69e8ed448747F589FFD91622886";
+  const contractAddress = "0x4fC92Db7DD04f69e8ed448747F589FFD91622886"; // The contract is deployed on the local chain
 
   const account = privateKeyToAccount(
     process.env.OPERATOR_PRIVATE_KEY as `0x${string}`
